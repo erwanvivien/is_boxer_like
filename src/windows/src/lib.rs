@@ -1,5 +1,5 @@
 pub use windows::core::PCSTR;
-pub use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT, WPARAM};
+pub use windows::Win32::Foundation::{BOOL, HWND, LPARAM, POINT, RECT, WPARAM};
 
 // Window Styles
 pub mod styles {
@@ -15,6 +15,7 @@ pub mod windowing {
     pub use windows::Win32::UI::WindowsAndMessaging::{
         FindWindowA as FindWindow,
         GetClientRect,
+        GetCursorPos,
         GetForegroundWindow, // Forces clippy to put them once per line
         GetWindowLongPtrA as GetWindowLong,
         GetWindowRect,
@@ -23,29 +24,35 @@ pub mod windowing {
         GetWindowThreadProcessId,
         MoveWindow,
         PostMessageA as PostMessage,
+        SendMessageA as SendMessage,
         SetForegroundWindow,
         SetWindowLongPtrA as SetWindowLong,
         SetWindowPos,
+        ShowWindow,
         SystemParametersInfoA as SystemParametersInfo,
     };
 
     pub use windows::Win32::UI::WindowsAndMessaging::{
-        SPI_GETWORKAREA, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER,
-        SWP_SHOWWINDOW, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+        SHOW_WINDOW_CMD, SPI_GETWORKAREA, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOOWNERZORDER,
+        SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+        WM_NCACTIVATE,
     };
 }
 
 pub mod messaging {
     pub use windows::Win32::UI::WindowsAndMessaging::{
+        HTCLIENT, HWND_NOTOPMOST, HWND_TOP, HWND_TOPMOST, MA_ACTIVATE, SW_HIDE, SW_RESTORE,
         WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP,
-        WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP,
+        WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PARENTNOTIFY, WM_RBUTTONDOWN,
+        WM_RBUTTONUP,
     };
 }
 
 pub mod vk {
     // pub use windows::Win32::UI::Input::KeyboardAndMouseInput::*;
-    pub use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
+    pub use windows::Win32::System::SystemServices::{MK_LBUTTON, MK_MBUTTON, MK_RBUTTON};
     pub use windows::Win32::UI::Input::KeyboardAndMouse::*;
+    pub use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, GetKeyboardState};
 }
 
 pub mod threading {

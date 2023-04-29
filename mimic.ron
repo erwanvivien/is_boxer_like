@@ -1,0 +1,5 @@
+Config (
+    window_name: "warcraft",
+    layout: Always,
+    mode: Mimic(Milliseconds(10))
+)

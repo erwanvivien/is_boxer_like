@@ -1,0 +1,7 @@
+Config (
+    window_name: "warcraft",
+    mode: Bot([
+        Sleep(Seconds(1)),
+        KeyStroke(VK_C),
+    ])
+)
