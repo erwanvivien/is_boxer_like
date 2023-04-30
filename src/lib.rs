@@ -23,6 +23,9 @@ use windows::{
 
 pub use windows::WPARAM;
 
+mod config;
+pub use crate::config::{BotAction, Config, LayoutOptions, Mode};
+
 #[derive(Debug, Clone)]
 struct Window {
     hwnd: HWND,
@@ -35,17 +38,20 @@ pub struct App {
     windows: Vec<Window>,
 
     keyboard: BTreeSet<VIRTUAL_KEY>,
+    config: Config,
 }
 
 impl App {
-    pub fn new<P: Into<String>>(pattern: P) -> Self {
+    pub fn new(config: Config) -> Self {
+        let window_name = config.window_name.clone();
         let mut app = Self {
             windows: Vec::new(),
             main_hwnd: None,
             keyboard: BTreeSet::new(),
+            config,
         };
 
-        app.update_windows(pattern);
+        app.update_windows(window_name);
         app
     }
 
@@ -106,8 +112,6 @@ impl App {
     }
 
     pub fn mimic(&self) {
-        use windows::vk::{VK_D, VK_Q, VK_S, VK_SPACE, VK_Z};
-
         let main_hwnd = unsafe { GetForegroundWindow() };
         if !self.has_hwnd(main_hwnd) {
             return;
@@ -120,33 +124,24 @@ impl App {
             .filter(|window| window.hwnd != main_hwnd)
             .collect::<Vec<_>>();
 
-        if unsafe { GetAsyncKeyState(i32::from(VK_LMENU.0)) as u16 } & 0x8000 != 0 {
-            return;
+        let skip_keybind = &self.config.skip_keybind;
+        let remap_keybind = &self.config.remap_keybind;
+
+        for key in &self.config.keybind {
+            if skip_keybind.contains(key) || remap_keybind.contains_key(key) {
+                continue;
+            }
+
+            let state = unsafe { GetAsyncKeyState(*key as i32) } as u16;
+            if state & 0x8000 != 0 {
+                self.send_key_hwnds(WPARAM(*key as usize), &other_hwnds);
+            }
         }
 
-        const RANGES: [RangeInclusive<u16>; 10] = [
-            VK_NUMPAD0.0..=VK_NUMPAD9.0,
-            VK_F1.0..=VK_F12.0,
-            VK_0.0..=VK_9.0,
-            VK_LEFT.0..=VK_DOWN.0,
-            VK_A.0..=VK_Z.0,
-            VK_SPACE.0..=VK_SPACE.0,
-            VK_OEM_102.0..=VK_OEM_102.0,
-            VK_OEM_8.0..=VK_OEM_8.0,
-            VK_OEM_COMMA.0..=VK_OEM_COMMA.0,
-            VK_OEM_1.0..=VK_OEM_1.0,
-        ];
-
-        for range in RANGES.iter() {
-            for key in range.clone().into_iter() {
-                if matches!(VIRTUAL_KEY(key), VK_Z | VK_Q | VK_S | VK_D | VK_SPACE) {
-                    continue;
-                }
-
-                let state = unsafe { GetAsyncKeyState(i32::from(key)) } as u16;
-                if state & 0x8000 != 0 {
-                    self.send_key_hwnds(WPARAM(usize::from(key)), &other_hwnds);
-                }
+        for (key, remaped_key) in remap_keybind {
+            let state = unsafe { GetAsyncKeyState(*key as i32) } as u16;
+            if state & 0x8000 != 0 {
+                self.send_key_hwnds(WPARAM(*remaped_key as usize), &other_hwnds);
             }
         }
 

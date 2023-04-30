@@ -1,11 +1,11 @@
 mod config;
 use std::time::Duration;
 
-use crate::config::BotAction;
-use crate::config::LayoutOptions::{Always, Init};
-use crate::config::Mode::{Bot, Mimic};
-use config::{Config, Mode};
 use is_boxer_like::App;
+use is_boxer_like::BotAction;
+use is_boxer_like::LayoutOptions::{Always, Init};
+use is_boxer_like::Mode::{Bot, Mimic};
+use is_boxer_like::{Config, Mode};
 
 use clap::Parser;
 
@@ -59,16 +59,16 @@ fn main() -> Result<(), eframe::Error> {
     };
 
     let config = if let Some(config) = config {
-        config::Config::load(config)
+        Config::load(config)
     } else {
-        config::Config::default()
+        Config::default()
     };
 
     if config.window_name.is_empty() {
         panic!("No window name specified");
     }
 
-    let mut app = App::new(&config.window_name);
+    let mut app = App::new(config.clone());
 
     if matches!(&config.layout, Init | Always) {
         app.layout_windows();

@@ -1,12 +1,15 @@
+use std::collections::HashMap;
+use std::hash::Hash;
+use std::ops::RangeInclusive;
 use std::{io::Read, path::Path};
 
 use windows::vk;
 use windows::vk::VIRTUAL_KEY;
 
-use serde::{Deserialize};
+use serde::Deserialize;
 
 // Ignore case
-#[derive(Deserialize, Debug, PartialEq, Eq, Hash)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Hash, Clone, Copy)]
 #[allow(non_camel_case_types)]
 pub enum Key {
     VK_0 = vk::VK_0.0 as isize,
@@ -246,7 +249,7 @@ impl Into<VIRTUAL_KEY> for Key {
     }
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug, Clone)]
 pub enum Duration {
     Milliseconds(u64),
     Seconds(u64),
@@ -273,20 +276,20 @@ impl Into<std::time::Duration> for Duration {
     }
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug, Clone)]
 pub enum BotAction {
     Sleep(Duration),
     MouseTo(usize, usize),
     KeyStroke(Key),
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug, Clone)]
 pub enum Mode {
     Mimic(Duration),
     Bot(Vec<BotAction>),
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug, Clone)]
 pub enum LayoutOptions {
     Never,
     Init,
@@ -299,12 +302,18 @@ impl Default for LayoutOptions {
     }
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug, Clone)]
 pub struct Config {
     pub window_name: String,
     #[serde(default)]
     pub layout: LayoutOptions,
     pub mode: Mode,
+    #[serde(default = "default_remap")]
+    pub remap_keybind: HashMap<Key, Key>,
+    #[serde(default = "default_skip")]
+    pub skip_keybind: Vec<Key>,
+    #[serde(default = "default_keybind")]
+    pub keybind: Vec<Key>,
 }
 
 impl Config {
@@ -317,12 +326,60 @@ impl Config {
     }
 }
 
+pub fn default_keybind() -> Vec<Key> {
+    pub use Key::*;
+
+    let mut keybind = Vec::new();
+
+    const RANGES: [RangeInclusive<i8>; 10] = [
+        VK_NUMPAD0 as i8..=VK_NUMPAD9 as i8,
+        VK_F1 as i8..=VK_F12 as i8,
+        VK_0 as i8..=VK_9 as i8,
+        VK_LEFT as i8..=VK_DOWN as i8,
+        VK_A as i8..=VK_Z as i8,
+        VK_SPACE as i8..=VK_SPACE as i8,
+        VK_OEM_102 as i8..=VK_OEM_102 as i8,
+        VK_OEM_8 as i8..=VK_OEM_8 as i8,
+        VK_OEM_COMMA as i8..=VK_OEM_COMMA as i8,
+        VK_OEM_1 as i8..=VK_OEM_1 as i8,
+    ];
+
+    for range in RANGES.into_iter() {
+        for key in range {
+            // SAFETY: We know that the key is a valid key because it's been parsed
+            // from the range of valid keys.
+            keybind.push(unsafe { std::mem::transmute::<i8, Key>(key) });
+        }
+    }
+
+    keybind
+}
+
+pub fn default_remap() -> HashMap<Key, Key> {
+    pub use Key::{VK_LMENU, VK_SPACE};
+
+    let default_remap = [(VK_LMENU, VK_SPACE)];
+    HashMap::from(default_remap)
+}
+
+pub fn default_skip() -> Vec<Key> {
+    pub use Key::*;
+
+    [VK_D, VK_Q, VK_S, VK_SPACE, VK_Z]
+        .into_iter()
+        .map(|key| unsafe { std::mem::transmute::<i8, Key>(key as i8) })
+        .collect::<Vec<_>>()
+}
+
 impl Default for Config {
     fn default() -> Self {
         Config {
             window_name: String::from("warcraft"),
             layout: LayoutOptions::Init,
             mode: Mode::Mimic(Duration::Milliseconds(10)),
+            remap_keybind: default_remap(),
+            skip_keybind: default_skip(),
+            keybind: default_keybind(),
         }
     }
 }
