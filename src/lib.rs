@@ -81,7 +81,6 @@ impl App {
         }
 
         let pattern = pattern.into().to_lowercase();
-
         let mut collector = HWNDCollector(Vec::new(), pattern);
 
         unsafe {
@@ -191,24 +190,8 @@ impl App {
         let current = windows.pop().unwrap();
         let main = windows.pop().unwrap();
 
-        unsafe {
-            MoveWindow(
-                main.hwnd,
-                current.rect.left,
-                current.rect.top,
-                current.rect.right,
-                current.rect.bottom,
-                true,
-            );
-            MoveWindow(
-                current.hwnd,
-                main.rect.left,
-                main.rect.top,
-                main.rect.right,
-                main.rect.bottom,
-                true,
-            );
-        };
+        MoveWindowRect(main.hwnd, &current.rect, true);
+        MoveWindowRect(current.hwnd, &main.rect, true);
 
         std::mem::swap(&mut main.rect, &mut current.rect);
         self.main_hwnd = Some(foreground_hwnd);
@@ -268,43 +251,16 @@ impl App {
 
             let rect = window.rect;
             set_borders(window.hwnd, false);
-            unsafe {
-                MoveWindow(
-                    window.hwnd,
-                    rect.left,
-                    rect.top,
-                    rect.right,
-                    rect.bottom,
-                    true,
-                );
-            };
+            MoveWindowRect(window.hwnd, &rect, true);
         }
     }
 
     pub fn foreground(&self) {
         for window in self.windows.iter() {
-            unsafe {
-                // Sets the window to be foreground always on top
-                SetWindowPos(
-                    window.hwnd,
-                    HWND_TOPMOST,
-                    0,
-                    0,
-                    0,
-                    0,
-                    SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE,
-                );
-                // Sets the window to be a normal window again
-                SetWindowPos(
-                    window.hwnd,
-                    HWND_NOTOPMOST,
-                    0,
-                    0,
-                    0,
-                    0,
-                    SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE,
-                );
-            }
+            // Sets the window to be foreground always on top
+            SetWindowLevel(window.hwnd, HWND_TOPMOST);
+            // Sets the window to be a normal window again
+            SetWindowLevel(window.hwnd, HWND_NOTOPMOST);
         }
     }
 
@@ -364,6 +320,26 @@ impl eframe::App for App {
                 self.update_windows("warcraft")
             }
         });
+    }
+}
+
+pub fn SetWindowLevel(hwnd: HWND, level: HWND) {
+    unsafe {
+        SetWindowPos(
+            hwnd,
+            level,
+            0,
+            0,
+            0,
+            0,
+            SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE,
+        );
+    }
+}
+
+pub fn MoveWindowRect(hwnd: HWND, rect: &RECT, repaint: bool) {
+    unsafe {
+        MoveWindow(hwnd, rect.left, rect.top, rect.right, rect.bottom, repaint);
     }
 }
 
