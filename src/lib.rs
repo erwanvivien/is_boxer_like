@@ -318,6 +318,7 @@ impl eframe::App for App {
     }
 }
 
+#[allow(non_snake_case)]
 pub fn SetWindowLevel(hwnd: HWND, level: HWND) {
     unsafe {
         SetWindowPos(
@@ -332,6 +333,7 @@ pub fn SetWindowLevel(hwnd: HWND, level: HWND) {
     }
 }
 
+#[allow(non_snake_case)]
 pub fn MoveWindowRect(hwnd: HWND, rect: &RECT, repaint: bool) {
     unsafe {
         MoveWindow(hwnd, rect.left, rect.top, rect.right, rect.bottom, repaint);
