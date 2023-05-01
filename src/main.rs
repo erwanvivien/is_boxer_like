@@ -19,26 +19,47 @@ struct Args {
     config: Option<String>,
 }
 
-fn bot_loop(app: &mut App, actions: Vec<BotAction>) {
+fn bot_loop(app: &mut App) {
+    let mut last_sleep = None;
+
     let mut i = 0;
     loop {
+        if app.global_shortcuts() {
+            return;
+        }
+
+        let actions = &app.config.bot_action;
         let current_action = &actions[i];
+
         match current_action {
-            BotAction::Sleep(duration) => std::thread::sleep((*duration).into()),
+            BotAction::Sleep(duration) => {
+                if last_sleep.is_none() {
+                    last_sleep = Some(std::time::Instant::now());
+                } else if last_sleep.unwrap().elapsed() >= (*duration).into() {
+                    last_sleep = None;
+                }
+
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
             BotAction::MouseTo(_, _) => {}
             BotAction::KeyStroke(key) => {
                 app.send_key_up(WPARAM(*key as usize));
                 app.send_key_down(WPARAM(*key as usize));
             }
         }
-        i = (i + 1) % actions.len();
+
+        if last_sleep.is_none() {
+            i = (i + 1) % actions.len();
+        }
     }
 }
 
-fn mimic_loop(app: &mut App, config: Config) {
-    let Config { mode: Mode::Mimic(delay), layout, ..  } = config else {
-        panic!("Expected Mimic mode");
-    };
+fn mimic_loop(app: &mut App) {
+    let Config {
+        mimic_timer: delay,
+        layout,
+        ..
+    } = app.config.clone();
 
     let delay: Duration = delay.into();
     loop {
@@ -46,6 +67,10 @@ fn mimic_loop(app: &mut App, config: Config) {
             if app.swap_windows() {
                 app.foreground();
             }
+        }
+
+        if app.global_shortcuts() {
+            return;
         }
 
         app.mimic();
@@ -78,17 +103,20 @@ fn main() -> Result<(), eframe::Error> {
         panic!("No window name specified");
     }
 
-    let mut app = App::new(config.clone());
+    let mut app = App::new(config);
 
-    if matches!(&config.layout, Init | Always) {
+    if matches!(&app.config.layout, Init | Always) {
         app.layout_windows();
         app.foreground();
     }
-    if let Bot(actions) = config.mode {
-        bot_loop(&mut app, actions);
-    } else if let Mimic(_) = config.mode {
-        mimic_loop(&mut app, config);
-    }
 
-    Ok(())
+    loop {
+        if let Bot = app.config.mode {
+            bot_loop(&mut app);
+        } else if let Mimic = app.config.mode {
+            mimic_loop(&mut app);
+        } else {
+            app.global_shortcuts();
+        }
+    }
 }

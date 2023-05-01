@@ -243,6 +243,15 @@ pub enum Key {
     VK_OEM_CLEAR = vk::VK_OEM_CLEAR.0 as isize,
 }
 
+impl From<i8> for Key {
+    fn from(key: i8) -> Self {
+        // Safety: It is unsafe to transmute from i8 to Key,
+        // but we know that this i8 has been parsed from a RON
+        // file, which means it is a valid Key.
+        unsafe { std::mem::transmute(key) }
+    }
+}
+
 impl Into<VIRTUAL_KEY> for Key {
     fn into(self) -> VIRTUAL_KEY {
         VIRTUAL_KEY(self as u16)
@@ -276,6 +285,12 @@ impl Into<std::time::Duration> for Duration {
     }
 }
 
+impl Default for Duration {
+    fn default() -> Self {
+        Duration::Milliseconds(10)
+    }
+}
+
 #[derive(serde::Deserialize, Debug, Clone)]
 pub enum BotAction {
     Sleep(Duration),
@@ -285,8 +300,9 @@ pub enum BotAction {
 
 #[derive(serde::Deserialize, Debug, Clone)]
 pub enum Mode {
-    Mimic(Duration),
-    Bot(Vec<BotAction>),
+    Mimic,
+    Bot,
+    Off,
 }
 
 #[derive(serde::Deserialize, Debug, Clone)]
@@ -303,17 +319,30 @@ impl Default for LayoutOptions {
 }
 
 #[derive(serde::Deserialize, Debug, Clone)]
+pub enum Shortcut {
+    Mode(Mode),
+    Layout,
+    Foreground,
+}
+
+#[derive(serde::Deserialize, Debug, Clone)]
 pub struct Config {
     pub window_name: String,
     #[serde(default)]
     pub layout: LayoutOptions,
     pub mode: Mode,
+    #[serde(default = "std::vec::Vec::new")]
+    pub bot_action: Vec<BotAction>,
+    #[serde(default)]
+    pub mimic_timer: Duration,
     #[serde(default = "default_remap")]
     pub remap_keybind: HashMap<Key, Key>,
     #[serde(default = "default_skip")]
     pub skip_keybind: Vec<Key>,
     #[serde(default = "default_keybind")]
     pub keybind: Vec<Key>,
+    #[serde(default = "default_shortcuts")]
+    pub shortcuts: HashMap<Key, Shortcut>,
 }
 
 impl Config {
@@ -339,9 +368,7 @@ pub fn default_keybind() -> Vec<Key> {
     ];
 
     for key in KEYS.iter() {
-        // SAFETY: We know that the key is a valid key because it's been parsed
-        // from the range of valid keys.
-        keybind.push(unsafe { std::mem::transmute::<i8, Key>(*key as i8) });
+        keybind.push(*key);
     }
 
     const RANGES: [RangeInclusive<i8>; 5] = [
@@ -354,9 +381,7 @@ pub fn default_keybind() -> Vec<Key> {
 
     for range in RANGES.into_iter() {
         for key in range {
-            // SAFETY: We know that the key is a valid key because it's been parsed
-            // from the range of valid keys.
-            keybind.push(unsafe { std::mem::transmute::<i8, Key>(key) });
+            keybind.push(key.into());
         }
     }
 
@@ -375,8 +400,20 @@ pub fn default_skip() -> Vec<Key> {
 
     [VK_D, VK_Q, VK_S, VK_SPACE, VK_Z]
         .into_iter()
-        .map(|key| unsafe { std::mem::transmute::<i8, Key>(key as i8) })
         .collect::<Vec<_>>()
+}
+
+pub fn default_shortcuts() -> HashMap<Key, Shortcut> {
+    pub use Key::*;
+
+    let default_shortcuts = [
+        (VK_ESCAPE, Shortcut::Mode(Mode::Off)),
+        (VK_B, Shortcut::Mode(Mode::Bot)),
+        (VK_R, Shortcut::Mode(Mode::Mimic)),
+        (VK_F, Shortcut::Foreground),
+        (VK_L, Shortcut::Layout),
+    ];
+    HashMap::from(default_shortcuts)
 }
 
 impl Default for Config {
@@ -384,10 +421,13 @@ impl Default for Config {
         Config {
             window_name: String::from("warcraft"),
             layout: LayoutOptions::Init,
-            mode: Mode::Mimic(Duration::Milliseconds(10)),
+            mode: Mode::Mimic,
+            bot_action: Vec::new(),
+            mimic_timer: Duration::Milliseconds(10),
             remap_keybind: default_remap(),
             skip_keybind: default_skip(),
             keybind: default_keybind(),
+            shortcuts: default_shortcuts(),
         }
     }
 }

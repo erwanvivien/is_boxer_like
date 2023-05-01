@@ -9,7 +9,7 @@ use windows::{
         GWL_EXSTYLE, GWL_STYLE, WS_CAPTION, WS_EX_CLIENTEDGE, WS_EX_DLGMODALFRAME,
         WS_EX_STATICEDGE, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_SYSMENU, WS_THICKFRAME,
     },
-    vk::{GetAsyncKeyState, MK_LBUTTON},
+    vk::{self, GetAsyncKeyState, MK_LBUTTON},
     windowing::{
         GetClientRect, GetForegroundWindow, GetWindowLong, GetWindowRect, GetWindowText,
         GetWindowTextLength, MoveWindow, PostMessage, SetForegroundWindow, SetWindowLong,
@@ -38,7 +38,7 @@ pub struct App {
     windows: Vec<Window>,
 
     keyboard: BTreeSet<usize>,
-    config: Config,
+    pub config: Config,
 }
 
 impl App {
@@ -97,6 +97,47 @@ impl App {
 
         self.windows = collector.0;
         self.main_hwnd = Some(self.windows[0].hwnd)
+    }
+
+    /// Returns true if the main loop needs to be restarted
+    pub fn global_shortcuts(&mut self) -> bool {
+        use config::Shortcut;
+
+        // If the user is not pressing the shortcut keys, ignore (LShift + LAlt)
+        if unsafe { GetAsyncKeyState(i32::from(vk::VK_LSHIFT.0)) } as u16 & 0x8000 == 0
+            || unsafe { GetAsyncKeyState(i32::from(vk::VK_LMENU.0)) } as u16 & 0x8000 == 0
+        {
+            return false;
+        }
+
+        let shortcuts = &self.config.shortcuts.clone();
+        let shortcuts_keys = shortcuts.keys().cloned().collect::<Vec<_>>();
+
+        let mut update = false;
+        for key in shortcuts_keys {
+            if unsafe { GetAsyncKeyState(key as i32) as u32 } & 0x8000 == 0 {
+                continue;
+            }
+
+            let action = shortcuts.get(&key).unwrap();
+            match action {
+                Shortcut::Foreground => self.foreground(),
+                Shortcut::Layout => {
+                    let foreground_hwnd = unsafe { GetForegroundWindow() };
+                    if self.has_hwnd(foreground_hwnd) {
+                        self.main_hwnd = Some(foreground_hwnd);
+                    }
+
+                    self.layout_windows()
+                }
+                Shortcut::Mode(mode) => {
+                    self.config.mode = mode.clone();
+                    update = true;
+                }
+            }
+        }
+
+        update
     }
 
     pub fn get_foreground_window(&mut self) -> bool {
@@ -225,7 +266,7 @@ impl App {
     }
 
     pub fn layout_windows(&mut self) {
-        if self.windows.len() <= 1 || self.main_hwnd.is_none() || self.is_main_focus() {
+        if self.windows.len() <= 1 || self.main_hwnd.is_none() {
             return;
         }
 
