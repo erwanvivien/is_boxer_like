@@ -331,17 +331,25 @@ pub fn default_keybind() -> Vec<Key> {
 
     let mut keybind = Vec::new();
 
-    const RANGES: [RangeInclusive<i8>; 10] = [
+    #[rustfmt::skip]
+    const KEYS: &[Key] = &[
+        VK_LCONTROL, VK_LSHIFT, VK_LMENU, VK_RCONTROL, VK_RSHIFT, VK_RMENU,
+        VK_SPACE, VK_OEM_102, VK_OEM_8, VK_OEM_COMMA, VK_OEM_1, VK_RETURN,
+        VK_BACK, VK_TAB, VK_CAPITAL, VK_ESCAPE, VK_PRIOR, VK_NEXT, VK_END,
+    ];
+
+    for key in KEYS.iter() {
+        // SAFETY: We know that the key is a valid key because it's been parsed
+        // from the range of valid keys.
+        keybind.push(unsafe { std::mem::transmute::<i8, Key>(*key as i8) });
+    }
+
+    const RANGES: [RangeInclusive<i8>; 5] = [
         VK_NUMPAD0 as i8..=VK_NUMPAD9 as i8,
         VK_F1 as i8..=VK_F12 as i8,
         VK_0 as i8..=VK_9 as i8,
         VK_LEFT as i8..=VK_DOWN as i8,
         VK_A as i8..=VK_Z as i8,
-        VK_SPACE as i8..=VK_SPACE as i8,
-        VK_OEM_102 as i8..=VK_OEM_102 as i8,
-        VK_OEM_8 as i8..=VK_OEM_8 as i8,
-        VK_OEM_COMMA as i8..=VK_OEM_COMMA as i8,
-        VK_OEM_1 as i8..=VK_OEM_1 as i8,
     ];
 
     for range in RANGES.into_iter() {
