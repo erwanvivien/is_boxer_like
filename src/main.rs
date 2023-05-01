@@ -26,7 +26,10 @@ fn bot_loop(app: &mut App, actions: Vec<BotAction>) {
         match current_action {
             BotAction::Sleep(duration) => std::thread::sleep((*duration).into()),
             BotAction::MouseTo(_, _) => {}
-            BotAction::KeyStroke(key) => app.send_key(WPARAM(*key as usize)),
+            BotAction::KeyStroke(key) => {
+                app.send_key_up(WPARAM(*key as usize));
+                app.send_key_down(WPARAM(*key as usize));
+            }
         }
         i = (i + 1) % actions.len();
     }

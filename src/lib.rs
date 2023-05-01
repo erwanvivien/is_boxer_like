@@ -1,16 +1,15 @@
-use std::{collections::BTreeSet, ops::RangeInclusive};
+use std::collections::BTreeSet;
 
 use windows::{
-    messaging::{HWND_NOTOPMOST, HWND_TOPMOST, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP},
+    messaging::{
+        HWND_NOTOPMOST, HWND_TOPMOST, KF_REPEAT, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP,
+    },
     process::EnumWindows,
     styles::{
         GWL_EXSTYLE, GWL_STYLE, WS_CAPTION, WS_EX_CLIENTEDGE, WS_EX_DLGMODALFRAME,
         WS_EX_STATICEDGE, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_SYSMENU, WS_THICKFRAME,
     },
-    vk::{
-        GetAsyncKeyState, MK_LBUTTON, VIRTUAL_KEY, VK_0, VK_9, VK_A, VK_DOWN, VK_F1, VK_F12,
-        VK_LEFT, VK_LMENU, VK_NUMPAD0, VK_NUMPAD9, VK_OEM_1, VK_OEM_102, VK_OEM_8, VK_OEM_COMMA,
-    },
+    vk::{GetAsyncKeyState, MK_LBUTTON},
     windowing::{
         GetClientRect, GetForegroundWindow, GetWindowLong, GetWindowRect, GetWindowText,
         GetWindowTextLength, MoveWindow, PostMessage, SetForegroundWindow, SetWindowLong,
@@ -24,6 +23,7 @@ use windows::{
 pub use windows::WPARAM;
 
 mod config;
+use crate::config::Key;
 pub use crate::config::{BotAction, Config, LayoutOptions, Mode};
 
 #[derive(Debug, Clone)]
@@ -37,7 +37,7 @@ pub struct App {
     main_hwnd: Option<HWND>,
     windows: Vec<Window>,
 
-    keyboard: BTreeSet<VIRTUAL_KEY>,
+    keyboard: BTreeSet<usize>,
     config: Config,
 }
 
@@ -111,7 +111,31 @@ impl App {
         return true;
     }
 
-    pub fn mimic(&self) {
+    pub fn mimic(&mut self) {
+        enum KeyState {
+            Insert,
+            Remove,
+            None,
+        }
+
+        fn mimic_key(app: &App, key: Key, remaped_key: Key, other_hwnds: &[Window]) -> KeyState {
+            let state = unsafe { GetAsyncKeyState(key as i32) } as u16;
+            let key_already_pressed = app.keyboard.contains(&(key as usize));
+            if state & 0x8000 != 0 {
+                app.send_key_hwnds(WM_KEYDOWN, WPARAM(remaped_key as usize), &other_hwnds);
+                if key_already_pressed {
+                    KeyState::None
+                } else {
+                    KeyState::Insert
+                }
+            } else if key_already_pressed {
+                app.send_key_hwnds(WM_KEYUP, WPARAM(remaped_key as usize), &other_hwnds);
+                KeyState::Remove
+            } else {
+                KeyState::None
+            }
+        }
+
         let main_hwnd = unsafe { GetForegroundWindow() };
         if !self.has_hwnd(main_hwnd) {
             return;
@@ -132,17 +156,19 @@ impl App {
                 continue;
             }
 
-            let state = unsafe { GetAsyncKeyState(*key as i32) } as u16;
-            if state & 0x8000 != 0 {
-                self.send_key_hwnds(WPARAM(*key as usize), &other_hwnds);
-            }
+            match mimic_key(self, *key, *key, &other_hwnds) {
+                KeyState::Insert => self.keyboard.insert(*key as usize),
+                KeyState::Remove => self.keyboard.remove(&(*key as usize)),
+                KeyState::None => false,
+            };
         }
 
         for (key, remaped_key) in remap_keybind {
-            let state = unsafe { GetAsyncKeyState(*key as i32) } as u16;
-            if state & 0x8000 != 0 {
-                self.send_key_hwnds(WPARAM(*remaped_key as usize), &other_hwnds);
-            }
+            match mimic_key(self, *key, *remaped_key, &other_hwnds) {
+                KeyState::Insert => self.keyboard.insert(*key as usize),
+                KeyState::Remove => self.keyboard.remove(&(*key as usize)),
+                KeyState::None => false,
+            };
         }
 
         // for key in [VK_LBUTTON, VK_RBUTTON, VK_MBUTTON].iter() {
@@ -259,16 +285,25 @@ impl App {
         }
     }
 
-    pub fn send_key(&self, key: WPARAM) {
-        self.send_key_hwnds(key, &self.windows);
+    pub fn send_key_down(&self, key: WPARAM) {
+        self.send_key_hwnds(WM_KEYDOWN, key, &self.windows);
     }
 
-    fn send_key_hwnds(&self, key: WPARAM, hwnds: &[Window]) {
-        let lparam = LPARAM(key.0 as isize);
+    pub fn send_key_up(&self, key: WPARAM) {
+        self.send_key_hwnds(WM_KEYUP, key, &self.windows);
+    }
+
+    fn send_key_hwnds(&self, message: u32, key: WPARAM, hwnds: &[Window]) {
+        // https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#keystroke-message-flags
+        let mut flags = (key.0 as u32) << 16;
+        if self.keyboard.contains(&key.0) {
+            flags |= KF_REPEAT;
+        }
+
+        let lparam = LPARAM(flags as isize);
         for window in hwnds.iter() {
             unsafe {
-                PostMessage(window.hwnd, WM_KEYDOWN, key, lparam);
-                PostMessage(window.hwnd, WM_KEYUP, key, lparam);
+                PostMessage(window.hwnd, message, key, lparam);
             };
 
             // TODO: Add random
