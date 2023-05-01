@@ -5,6 +5,7 @@ use is_boxer_like::App;
 use is_boxer_like::BotAction;
 use is_boxer_like::LayoutOptions::{Always, Init};
 use is_boxer_like::Mode::{Bot, Mimic};
+use is_boxer_like::WPARAM;
 use is_boxer_like::{Config, Mode};
 
 use clap::Parser;
@@ -18,9 +19,15 @@ struct Args {
     config: Option<String>,
 }
 
-fn bot_loop(_app: &mut App, actions: Vec<BotAction>) {
+fn bot_loop(app: &mut App, actions: Vec<BotAction>) {
     let mut i = 0;
     loop {
+        let current_action = &actions[i];
+        match current_action {
+            BotAction::Sleep(duration) => std::thread::sleep((*duration).into()),
+            BotAction::MouseTo(_, _) => {}
+            BotAction::KeyStroke(key) => app.send_key(WPARAM(*key as usize)),
+        }
         i = (i + 1) % actions.len();
     }
 }

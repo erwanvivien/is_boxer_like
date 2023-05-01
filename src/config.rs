@@ -249,7 +249,7 @@ impl Into<VIRTUAL_KEY> for Key {
     }
 }
 
-#[derive(serde::Deserialize, Debug, Clone)]
+#[derive(serde::Deserialize, Debug, Clone, Copy)]
 pub enum Duration {
     Milliseconds(u64),
     Seconds(u64),
